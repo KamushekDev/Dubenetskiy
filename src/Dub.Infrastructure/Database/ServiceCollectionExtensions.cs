@@ -16,18 +16,20 @@ namespace Dub.Infrastructure.Database
 
             sc.AddDbContext<DubContext>((sp, options) =>
             {
-                var dbOptions = sp.GetService<IOptions<PostgresOptions>>();
-                var connectionString = dbOptions!.Value.CombineToConnectionString;
+                var pgOptions = sp.GetService<IOptions<PostgresOptions>>();
+                var connectionString = pgOptions!.Value.CombineToConnectionString;
                 options.UseNpgsql(connectionString);
             });
         }
 
 
-        public static void AddDefaultData(this IServiceProvider sp)
+        public static void UseDefaultData(this IServiceProvider sp)
         {
             var scope = sp.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<DubContext>();
+            var isReady = context.Database.CanConnectAsync().Result;
 
+            Console.WriteLine($"Is database ready: {isReady}.");
 
             scope.Dispose();
         }

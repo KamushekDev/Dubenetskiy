@@ -4,6 +4,7 @@ namespace Dub.Infrastructure.Database
 {
     public class DubContext : DbContext
     {
-        public DubContext(DbContextOptions options) : base(options) { }
+        public DubContext(DbContextOptions<DubContext> options) :
+            base(options) { }
     }
 }

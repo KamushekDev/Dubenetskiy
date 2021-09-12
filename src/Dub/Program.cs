@@ -19,7 +19,7 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.UseDeveloperExceptionPage();
-    app.Services.AddDefaultData();
+    app.Services.UseDefaultData();
 }
 
 app.MapGet("/", (Func<string>)(() => "Hello World!"));
