@@ -1,0 +1,3 @@
+﻿syntax = "proto3";
+package Dub.V1;
+option csharp_namespace = "DubGrpcGenerated";
