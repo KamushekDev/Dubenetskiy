@@ -1,0 +1,48 @@
+﻿syntax = "proto3";
+package Dub.V1;
+option csharp_namespace = "DubApi";
+
+service Dub {
+  rpc GetProductClass (GetProductClassRequest) returns (GetProductClassResponse) {}
+  rpc GetProductClasses (GetProductClassesRequest) returns (GetProductClassesResponse) {}
+  rpc AddProductClass(AddProductClassRequest) returns (AddProductClassResponse) {}
+  rpc IsProductClassIsAncestor(IsProductClassIsAncestorRequest) returns (IsProductClassIsAncestorResponse) {}
+}
+
+message IsProductClassIsAncestorRequest{
+  int64 descendentId = 1;
+  int64 ancestorId = 2;
+}
+
+message IsProductClassIsAncestorResponse{
+  bool isAncestor = 1;
+}
+
+message GetProductClassesRequest{}
+
+message GetProductClassesResponse{
+  repeated ProductClassMsg productClasses = 1;
+}
+
+message GetProductClassRequest {
+  int64 id = 1;
+}
+
+message GetProductClassResponse {
+  ProductClassMsg productClass = 1;
+}
+
+message ProductClassMsg {
+  int64 id = 1;
+  string name = 2;
+  int64 parentId = 3;
+}
+
+message AddProductClassRequest {
+  string name = 1;
+  optional int64 parentId = 2;
+}
+
+message AddProductClassResponse {
+  int64 id = 1;
+}
