@@ -1,0 +1,42 @@
+﻿syntax = "proto3";
+package Product.V1;
+option csharp_namespace = "DubGrpc.Products";
+
+service ProductService {
+  rpc GetProduct (GetProductRequest) returns (GetProductResponse) {}
+  rpc GetProducts (GetProductsRequest) returns (GetProductsResponse) {}
+  rpc AddProduct(AddProductRequest) returns (AddProductResponse) {}
+}
+
+message ProductMsg{
+  int64 id = 1;
+  string name = 2;
+  int64 classId = 3;
+  optional int64 baseId = 4;
+  string version = 5;
+}
+
+message GetProductRequest {
+  int64 id = 1;
+}
+
+message GetProductResponse {
+  ProductMsg product = 1;
+}
+
+message GetProductsRequest {}
+
+message GetProductsResponse {
+  repeated ProductMsg products = 1;
+}
+
+message AddProductRequest {
+  string name = 1;
+  int64 classId = 2;
+  optional int64 baseId = 3;
+  string version = 4;
+}
+
+message AddProductResponse {
+  int64 id = 1;
+}

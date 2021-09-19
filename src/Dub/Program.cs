@@ -1,8 +1,10 @@
 using System;
 using Dub;
 using Dub.Grpc;
+using Dub.Grpc.Interceptors;
 using Dub.Infrastructure;
 using Dub.Infrastructure.Database;
+using Dub.Infrastructure.Profiles;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,8 +18,8 @@ if (builder.Environment.IsDevelopment())
 }
 
 builder.Services.AddDatabase(builder.Configuration);
-builder.Services.AddGrpc();
-builder.Services.AddAutoMapper(typeof(AutoMapperProfile).Assembly);
+builder.Services.AddGrpc(options => options.Interceptors.Add(typeof(GrpcExceptionInterceptor)));
+builder.Services.AddAutoMapper(typeof(ProductClassProfile).Assembly);
 
 var app = builder.Build();
 
@@ -29,6 +31,10 @@ if (app.Environment.IsDevelopment())
 
 app.UseRouting();
 
-app.UseEndpoints(endpoints => { endpoints.MapGrpcService<DubService>(); });
+app.UseEndpoints(endpoints =>
+{
+    endpoints.MapGrpcService<ProductClassService>();
+    endpoints.MapGrpcService<ProductService>();
+});
 
 app.Run();

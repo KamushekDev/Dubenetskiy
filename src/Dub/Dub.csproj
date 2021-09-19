@@ -13,6 +13,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\Dub.Core\Dub.Core.csproj" />
       <ProjectReference Include="..\Dub.Infrastructure\Dub.Infrastructure.csproj" />
       <ProjectReference Include="..\Dub.Protos\Dub.Protos.csproj" />
     </ItemGroup>

@@ -1,8 +1,8 @@
 ﻿syntax = "proto3";
-package Dub.V1;
-option csharp_namespace = "DubApi";
+package ProductClass.V1;
+option csharp_namespace = "DubGrpc.ProductClasses";
 
-service Dub {
+service ProductClassesService {
   rpc GetProductClass (GetProductClassRequest) returns (GetProductClassResponse) {}
   rpc GetProductClasses (GetProductClassesRequest) returns (GetProductClassesResponse) {}
   rpc AddProductClass(AddProductClassRequest) returns (AddProductClassResponse) {}
@@ -35,10 +35,10 @@ message GetProductClassResponse {
 message ProductClassMsg {
   int64 id = 1;
   string name = 2;
-  int64 parentId = 3;
+  optional int64 parentId = 3;
 }
 
-message AddProductClassRequest {
+message AddProductClassRequest {                                                                                                                
   string name = 1;
   optional int64 parentId = 2;
 }
