@@ -1,0 +1,8 @@
+﻿syntax = "proto3";
+package Processes.V1;
+option csharp_namespace = "DubGrpc.Processes";
+
+service ProcessesService {
+  //start process
+  // get active processes
+}

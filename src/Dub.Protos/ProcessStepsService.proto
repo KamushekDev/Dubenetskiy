@@ -1,0 +1,37 @@
+﻿syntax = "proto3";
+package ProcessStep.V1;
+option csharp_namespace = "DubGrpc.ProcessSteps";
+
+service ProcessStepsService {
+  rpc AddProcessStep(AddProcessStepRequest) returns (AddProcessStepResponse) {}
+  rpc GetProcessStep(GetProcessStepRequest) returns (GetProcessStepResponse) {}
+  rpc GetProcessSteps(GetProcessStepsRequest) returns (GetProcessStepsResponse) {}
+}
+
+message ProcessStepMsg {
+  int64 id = 1;
+  string name = 2;
+}
+
+message AddProcessStepRequest {
+  string name = 1;
+}
+
+message AddProcessStepResponse {
+  int64 id = 1;
+}
+
+message GetProcessStepRequest {
+  int64 id = 1;
+}
+
+message GetProcessStepResponse {
+  ProcessStepMsg processStep = 1;
+}
+
+message GetProcessStepsRequest {
+}
+
+message GetProcessStepsResponse {
+  repeated ProcessStepMsg processSteps = 1;
+}

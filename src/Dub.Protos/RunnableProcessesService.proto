@@ -1,0 +1,39 @@
+﻿syntax = "proto3";
+package RunnableProcesses.V1;
+option csharp_namespace = "DubGrpc.RunnableProcesses";
+
+service RunnableProcessesService {
+  rpc AddRunnableProcess(AddRunnableProcessRequest) returns (AddRunnableProcessResponse) {}
+  rpc GetRunnableProcessStep(GetRunnableProcessRequest) returns (GetRunnableProcessResponse) {}
+  rpc GetRunnableProcessSteps(GetRunnableProcessesRequest) returns (GetRunnableProcessesResponse) {}
+}
+
+message RunnableProcessMsg {
+  int64 id = 1;
+  string name = 2;
+  int64 startStepId = 3;
+}
+
+message AddRunnableProcessRequest {
+  string name = 1;
+  int64 startStepId = 2;
+}
+
+message AddRunnableProcessResponse {
+  int64 id = 1;
+}
+
+message GetRunnableProcessRequest {
+  int64 id = 1;
+}
+
+message GetRunnableProcessResponse {
+  RunnableProcessMsg runnableProcessStep = 1;
+}
+
+message GetRunnableProcessesRequest {
+}
+
+message GetRunnableProcessesResponse {
+  repeated RunnableProcessMsg runnableProcessSteps = 1;
+}

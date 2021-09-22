@@ -37,6 +37,6 @@ namespace Dub.Infrastructure.Profiles
                     x.PreCondition(y => y.BaseId.HasValue);
                     x.MapFrom(y => y.BaseId);
                 });
-        }
+        }                                                       
     }
 }

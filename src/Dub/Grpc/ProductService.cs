@@ -33,7 +33,7 @@ namespace Dub.Grpc
 
         public override async Task<GetProductResponse> GetProduct(GetProductRequest request, ServerCallContext context)
         {
-            var entity = await _db.Products.FindAsync();
+            var entity = await _db.Products.FindAsync(request.Id);
             if (entity is null)
                 throw new NotFoundException();
             return new GetProductResponse { Product = _mapper.Map<ProductMsg>(entity) };

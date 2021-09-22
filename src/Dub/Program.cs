@@ -1,4 +1,5 @@
 using System;
+using AutoMapper;
 using Dub;
 using Dub.Grpc;
 using Dub.Grpc.Interceptors;
@@ -9,6 +10,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using RunnableProcessesService = DubGrpc.RunnableProcesses.RunnableProcessesService;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -33,6 +35,9 @@ app.UseRouting();
 
 app.UseEndpoints(endpoints =>
 {
+    endpoints.MapGrpcService<RunnableProcessService>();
+    endpoints.MapGrpcService<StepResolutionService>();
+    endpoints.MapGrpcService<ProcessStepService>();
     endpoints.MapGrpcService<ProductClassService>();
     endpoints.MapGrpcService<ProductService>();
 });

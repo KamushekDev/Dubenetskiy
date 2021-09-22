@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Dub.Grpc
 {
-    public class ProductClassService : DubGrpc.ProductClasses.ProductClassesService.ProductClassesServiceBase
+    public class ProductClassService : ProductClassesService.ProductClassesServiceBase
     {
         private readonly DubContext _db;
         private readonly IMapper _mapper;
@@ -44,7 +44,7 @@ namespace Dub.Grpc
             ServerCallContext context)
         {
             var id = request.Id;
-            var entity = await _db.ProductClasses.FindAsync(id, context.CancellationToken);
+            var entity = await _db.ProductClasses.FindAsync(id);
             if (entity is null)
                 throw new NotFoundException();
             return _mapper.Map<GetProductClassResponse>(entity);
@@ -56,7 +56,7 @@ namespace Dub.Grpc
             var ancestorId = request.AncestorId;
             var descendentId = request.DescendentId;
             bool isAncestor = false;
-            var current = await _db.ProductClasses.FindAsync(descendentId, context.CancellationToken);
+            var current = await _db.ProductClasses.FindAsync(descendentId);
             while (current is not null)
             {
                 if (current.Id == ancestorId)
@@ -65,7 +65,9 @@ namespace Dub.Grpc
                     break;
                 }
 
-                current = current.ParentId is null ? null : await _db.ProductClasses.FindAsync(current.ParentId, context.CancellationToken);
+                current = current.ParentId is null
+                    ? null
+                    : await _db.ProductClasses.FindAsync(current.ParentId);
             }
 
             return new IsProductClassIsAncestorResponse { IsAncestor = isAncestor };

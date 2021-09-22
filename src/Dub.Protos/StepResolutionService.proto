@@ -1,0 +1,50 @@
+﻿syntax = "proto3";
+package StepResolutions.V1;
+option csharp_namespace = "DubGrpc.StepResolutions";
+
+service StepResolutionsService {
+  rpc AddStepResolution(AddStepResolutionRequest) returns (AddStepResolutionResponse) {}
+  rpc EditStepResolution(EditStepResolutionRequest) returns (EditStepResolutionResponse) {}
+  rpc GetAllStepResolutions(GetAllStepResolutionsRequest) returns (GetAllStepResolutionsResponse) {}
+  rpc GetStepResolutions (GetStepResolutionsRequest) returns (GetStepResolutionsResponse) {}
+}
+
+message StepResolutionMsg{
+  int64 id = 1;
+  int64 currentStepId = 2;
+  int64 nextStepId = 3;
+  string resolutionText = 4;
+}
+
+message AddStepResolutionRequest {
+  int64 currentStepId = 1;
+  int64 nextStepId = 2;
+  string resolutionText = 3;
+}
+
+message AddStepResolutionResponse {
+  int64 id = 1;
+}
+
+message EditStepResolutionRequest {
+  int64 id = 1;
+  optional int64 currentStepId = 2;
+  optional int64 nextStepId = 3;
+  optional string resolutionText = 4;
+}
+
+message EditStepResolutionResponse {}
+
+message GetAllStepResolutionsRequest {}
+
+message GetAllStepResolutionsResponse {
+  repeated StepResolutionMsg stepResolutions = 1;
+}
+
+message GetStepResolutionsRequest {
+  int64 fromStepId = 1;
+}
+
+message GetStepResolutionsResponse {
+  repeated StepResolutionMsg stepResolutions = 1;
+}
