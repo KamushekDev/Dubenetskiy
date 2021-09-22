@@ -3,6 +3,40 @@ package Processes.V1;
 option csharp_namespace = "DubGrpc.Processes";
 
 service ProcessesService {
-  //start process
-  // get active processes
+  rpc StartProcess(StartProcessRequest) returns (StartProcessResponse) {}
+  rpc GetProcess(GetProcessRequest) returns (GetProcessResponse) {}
+  rpc GetProcesses(GetProcessesRequest) returns (GetProcessesResponse) {}
 }
+
+message ProcessMsg {
+  int64 id = 1;
+  int64 currentStepId = 2;
+  int64 createdFromProcessId = 3;
+  //todo: datetime
+  string createdAt = 4;
+}
+
+message StartProcessRequest {
+  int64 runnableProcessId = 1;
+
+}
+
+message StartProcessResponse {
+  int64 startedProcess = 2;
+}
+
+message GetProcessRequest {
+  int64 id = 1;
+}
+
+message GetProcessResponse {
+  ProcessMsg process = 1;
+}
+
+message GetProcessesRequest {}
+
+message GetProcessesResponse {
+  repeated ProcessMsg processes = 1;
+}
+
+message 

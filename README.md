@@ -17,7 +17,15 @@ dotnet ef dbcontext scaffold Name=Dub:Scaffold:ConnectionString Npgsql.EntityFra
 
 # Migrations
             
+### Update database
+```
+#from src folder
+dotnet ef database update -c DubContext -p Dub.Infrastructure -s Dub
+```
+
 ### Add migration
 ```
-dotnet ef migrations
+#from startup folder
+dotnet ef migrations add MigrationName -p Dub.Infrastructure -s Dub -o Database/Migrations
 ```
+          
