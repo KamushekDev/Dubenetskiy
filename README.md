@@ -14,18 +14,16 @@ dotnet ef dbcontext scaffold "Host=localhost;Database=dub;Port=5433;Username=pos
 dotnet user-secrets set "Dub:Scaffold:ConnectionString" "Host=localhost;Database=dub;Port=5433;Username=postgres;Password=postgres"
 dotnet ef dbcontext scaffold Name=Dub:Scaffold:ConnectionString Npgsql.EntityFrameworkCore.PostgreSQL -c DubContext --context-dir Database -f -o Database/Models --schema public -p Dub.Infrastructure 
 ```
+                                                                                     
+# Database
 
-# Migrations
-            
-### Update database
+###  Dump scheme & data to separate files
 ```
-#from src folder
-dotnet ef database update -c DubContext -p Dub.Infrastructure -s Dub
+pg_dump -hlocalhost -p5433 -U postgres -W -f"/opt/pg_dump/schema.sql" -npublic -s dub
+pg_dump -hlocalhost -p5433 -U postgres -W -f"/opt/pg_dump/data.sql" -npublic -a dub
 ```
 
-### Add migration
+###  Restore database
 ```
-#from startup folder
-dotnet ef migrations add MigrationName -p Dub.Infrastructure -s Dub -o Database/Migrations
+psql -hlocalhost -p5433 -Upostgres -W test < schema.sql
 ```
-          
