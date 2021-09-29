@@ -27,7 +27,49 @@ BEGIN
 END
 $func$ LANGUAGE plpgsql;
 
-Select AddUser('VladiSLAVE');
+Select AddUser('To delete');
+
+CREATE OR REPLACE FUNCTION public.EditUser(
+    userId bigint,
+    newUsername varchar)
+    RETURNS bool
+AS
+$func$
+BEGIN
+    if (select count(*) from users where id = userId) = 0 then
+        return false;
+    end if;
+
+    UPDATE users
+    set name = newUsername
+    where id = userId;
+
+    return true;
+END
+$func$ LANGUAGE plpgsql;
+
+select EditUser(2, 'Vladislave');
+select EditUser(6, 'Vladislave');
+
+CREATE OR REPLACE FUNCTION public.DeleteUser(
+    userId bigint)
+    RETURNS bool
+AS
+$func$
+BEGIN
+    if (select count(*) from users where id = userId) = 0 then
+        return false;
+    end if;
+
+    DELETE
+    from users
+    where id = userId;
+
+    return true;
+END
+$func$ LANGUAGE plpgsql;
+
+select DeleteUser(3);
 
 Select *
 from users;
@@ -169,7 +211,7 @@ CREATE OR REPLACE FUNCTION public.LinkSteps(
     currentStepId bigint,
     nextStepId bigint,
     text varchar,
-    roleIds bigint[],
+    roleIds bigint[] default array []::bigint[],
     OUT step_resolution_id int) AS
 $func$
 declare
@@ -191,10 +233,14 @@ BEGIN
         loop
             insert into resolution_permissions (resolution_id, role_id) values (step_resolution_id, roleId);
         end loop;
+
+    if cardinality(roleIds) = 0 then
+        insert into resolution_permissions (resolution_id, role_id) values (step_resolution_id, null);
+    end if;
 END
 $func$ LANGUAGE plpgsql;
 
-Select LinkSteps(5, 1, 'Тестовая параша 4', array[6]);
+Select LinkSteps(1, 3, 'Тестовая параша 4');
 
 select *
 from process_step_resolutions;
@@ -204,33 +250,31 @@ from process_step_resolutions;
 CREATE OR REPLACE FUNCTION public.AddProcess(
     processName varchar,
     startStepId bigint,
+    roleIds bigint[] default array []::bigint[],
     OUT process_id int) AS
 $func$
+declare
+    roleId bigint;
 BEGIN
     INSERT INTO runnable_processes (name, start_step_id)
     values (processName, startStepId)
     RETURNING id INTO process_id;
+
+    foreach roleId in array roleIds
+        loop
+            INSERT INTO process_permissions (process_id, role_id)    values (process_id, roleId);
+        end loop;
+
+    if cardinality(roleIds) = 0 then
+        INSERT INTO process_permissions (process_id, role_id)    values (process_id, null);
+    end if;
 END
 $func$ LANGUAGE plpgsql;
 
-Select AddProcess('Важный процесс', 1);
+Select AddProcess('Важный процесс', 1, array[8,10]);
 
 select *
 from runnable_processes;
-
-CREATE OR REPLACE FUNCTION public.AddProcessPermission(
-    processId bigint,
-    roleId bigint,
-    OUT permission_id int) AS
-$func$
-BEGIN
-    INSERT INTO process_permissions (process_id, role_id)
-    values (processId, roleId)
-    RETURNING id INTO permission_id;
-END
-$func$ LANGUAGE plpgsql;
-
-Select AddProcessPermission(1, 7);
 
 select *
 from process_permissions;
@@ -328,7 +372,10 @@ BEGIN
         return query select psr.id, resolution_text, psr.next_step_id
                      from process_step_resolutions psr
                      where current_step_id = currentStep
-                       and (select count(*) from resolution_permissions rp where resolution_id = psr.id and IsUserSuitable(userId, rp.role_id)) > 0;
+                       and (select count(*)
+                            from resolution_permissions rp
+                            where resolution_id = psr.id
+                              and IsUserSuitable(userId, rp.role_id)) > 0;
     end if;
 END
 $func$ LANGUAGE plpgsql;
@@ -346,8 +393,8 @@ CREATE OR REPLACE FUNCTION public.MoveProcess(
 AS
 $func$
 declare
-    resolution record;
-    process record;
+    resolution   record;
+    process      record;
     requiredRole record;
     isSuitable   bool = false;
 BEGIN
@@ -385,7 +432,7 @@ BEGIN
 END
 $func$ LANGUAGE plpgsql;
 
-Select MoveProcess(2, 1, 10);
+Select MoveProcess(2, 1, 12);
 
 select *
 from processes;
