@@ -17,10 +17,5 @@ namespace Dub.Grpc
             _db = db;
             _mapper = mapper;
         }
-
-        public override async Task<StartProcessResponse> StartProcess(StartProcessRequest request, ServerCallContext context)
-        {
-            var runnable = await _db.RunnableProcesses.FindAsync(request.RunnableProcessId);
-        }
     }
 }

@@ -29,7 +29,7 @@ message GetProcessRequest {
   int64 id = 1;
 }
 
-message GetProcessResponse {                                                                                                                                
+message GetProcessResponse {
   ProcessMsg process = 1;
 }
 
