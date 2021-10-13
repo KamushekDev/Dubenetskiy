@@ -12,7 +12,7 @@ $func$ LANGUAGE plpgsql;
 
 select UtcNow();
 
-select Checkuser(4);
+select Checkuser(2);
 
 -- Пользователи
 
@@ -27,7 +27,7 @@ BEGIN
 END
 $func$ LANGUAGE plpgsql;
 
-Select AddUser('To delete');
+Select AddUser('Test4');
 
 CREATE OR REPLACE FUNCTION public.EditUser(
     userId bigint,
@@ -48,28 +48,10 @@ BEGIN
 END
 $func$ LANGUAGE plpgsql;
 
-select EditUser(2, 'Vladislave');
+select EditUser(4, 'Test11');
 select EditUser(6, 'Vladislave');
 
-CREATE OR REPLACE FUNCTION public.DeleteUser(
-    userId bigint)
-    RETURNS bool
-AS
-$func$
-BEGIN
-    if (select count(*) from users where id = userId) = 0 then
-        return false;
-    end if;
-
-    DELETE
-    from users
-    where id = userId;
-
-    return true;
-END
-$func$ LANGUAGE plpgsql;
-
-select DeleteUser(3);
+select DeleteUser(4);
 
 Select *
 from users;
@@ -96,7 +78,7 @@ BEGIN
 END
 $func$ LANGUAGE plpgsql;
 
-Select AddRole('Logistic worker');
+Select AddRole('Test1', 10);
 
 Select *
 from roles;
@@ -245,6 +227,13 @@ Select LinkSteps(1, 3, 'Тестовая параша 4');
 select *
 from process_step_resolutions;
 
+select addstep('К тестовому шагу');
+select EditStepResolutionCurrentStepId(12, 1);
+select editstepresolutionnextstepid(12, 8);
+select EditStepResolutionText(12, 'Тестовый текст');
+select DeleteStepResolution(11);
+-- удалить внешние ключи
+
 -- Процессы
 
 CREATE OR REPLACE FUNCTION public.AddProcess(
@@ -262,16 +251,16 @@ BEGIN
 
     foreach roleId in array roleIds
         loop
-            INSERT INTO process_permissions (process_id, role_id)    values (process_id, roleId);
+            INSERT INTO process_permissions (process_id, role_id) values (process_id, roleId);
         end loop;
 
     if cardinality(roleIds) = 0 then
-        INSERT INTO process_permissions (process_id, role_id)    values (process_id, null);
+        INSERT INTO process_permissions (process_id, role_id) values (process_id, null);
     end if;
 END
 $func$ LANGUAGE plpgsql;
 
-Select AddProcess('Важный процесс', 1, array[8,10]);
+Select AddProcess('Важный процесс', 1, array [8,10]);
 
 select *
 from runnable_processes;
@@ -436,3 +425,664 @@ Select MoveProcess(2, 1, 12);
 
 select *
 from processes;
+
+-- VIP
+-- roles
+create or replace function public.EditRoleName(
+    roleId bigint,
+    newRoleName varchar
+)
+    returns bool
+as
+$func$
+BEGIN
+    if (select count(*) from roles where id = roleId) = 0 then
+        return false;
+    end if;
+    update roles
+    set name=newRoleName
+    where id = roleId;
+
+    return true;
+END
+$func$ LANGUAGE plpgsql;
+
+create or replace function public.EditRoleParent(
+    roleId bigint,
+    newParentRoleId bigint
+)
+    returns bool
+as
+$func$
+BEGIN
+    if (select count(*) from roles where id = roleId) = 0 then
+        return false;
+    end if;
+    update roles
+    set parent_id=newParentRoleId
+    where id = roleId;
+
+    return true;
+END
+$func$ LANGUAGE plpgsql;
+
+select EditRoleName(11, 'Test2');
+select EditRoleParent(11, 8);
+
+CREATE OR REPLACE FUNCTION public.DeleteRole(
+    roleId bigint)
+    RETURNS bool
+AS
+$func$
+BEGIN
+    if (select count(*) from roles where id = roleId) = 0 then
+        return false;
+    end if;
+
+    if (select count(*) from process_permissions where role_id=roleId)>0 or
+       (select count(*) from user_roles where role_id=roleId)>0 or
+       (select count(*) from resolution_permissions where roleId=roleId)>0 or
+       (select count(*) from roles where parent_id=roleId)>0 then
+        return false;
+    end if;
+
+
+    DELETE
+    from roles
+    where id = roleId;
+
+    return true;
+END
+$func$ LANGUAGE plpgsql;
+
+select DeleteRole(11);
+
+-- process_steps
+
+create or replace function public.EditStep(
+    stepId bigint,
+    newStepName varchar
+)
+    returns bool
+as
+$func$
+BEGIN
+    if (select count(*) from process_steps where id = stepId) = 0 then
+        return false;
+    end if;
+    update process_steps
+    set name=newStepName
+    where id = stepId;
+
+    return true;
+END
+$func$ LANGUAGE plpgsql;
+
+select editstep(7, 'Очень тестовый шаг');
+
+CREATE OR REPLACE FUNCTION public.DeleteStep(
+    stepId bigint)
+    RETURNS bool
+AS
+$func$
+BEGIN
+    if (select count(*) from process_steps where id = stepId) = 0 then
+        return false;
+    end if;
+
+    if (select count(*) from runnable_processes where start_step_id=stepId)>0 or
+       (select count(*) from process_step_resolutions where current_step_id=stepId)>0 or
+       (select count(*) from process_step_resolutions where next_step_id=stepId)>0 or -- ???
+       (select count(*) from processes where current_step_id=stepId)>0 then
+        return false;
+    end if;
+
+
+    DELETE
+    from process_steps
+    where id = stepId;
+
+    return true;
+END
+$func$ LANGUAGE plpgsql;
+
+select DeleteStep(7);
+
+-- process_step_resolutions
+
+create or replace function public.EditStepResolutionCurrentStepId(
+    stepResolutionId bigint,
+    newCurrentStepId bigint
+)
+    returns bool
+as
+$func$
+BEGIN
+    if (select count(*) from process_step_resolutions where id = stepResolutionId) = 0 or
+       (select count(*) from process_steps where id = newCurrentStepId) = 0 then
+        return false;
+    end if;
+    update process_step_resolutions
+    set current_step_id=newCurrentStepId
+    where id = stepResolutionId;
+
+    return true;
+END
+$func$ LANGUAGE plpgsql;
+
+create or replace function public.EditStepResolutionNextStepId(
+    stepResolutionId bigint,
+    newNextStepId bigint
+)
+    returns bool
+as
+$func$
+BEGIN
+    if (select count(*) from process_step_resolutions where id = stepResolutionId) = 0 or
+       (select count(*) from process_steps where id = newNextStepId) = 0 then
+        return false;
+    end if;
+    update process_step_resolutions
+    set next_step_id=newNextStepId
+    where id = stepResolutionId;
+
+    return true;
+END
+$func$ LANGUAGE plpgsql;
+
+create or replace function public.EditStepResolutionText( -- или EditStepResolutionResolutionText?
+    stepResolutionId bigint,
+    newResolutionText varchar
+)
+    returns bool
+as
+$func$
+BEGIN
+    if (select count(*) from process_step_resolutions where id = stepResolutionId) = 0 then
+        return false;
+    end if;
+    update process_step_resolutions
+    set resolution_text=newResolutionText
+    where id = stepResolutionId;
+
+    return true;
+END
+$func$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION public.DeleteProcessStepResolution(
+    processStepResolutionId bigint)
+    RETURNS bool
+AS
+$func$
+BEGIN
+    if (select count(*) from process_step_resolutions where id = processStepResolutionId) = 0 then
+        return false;
+    end if;
+
+    if (select count(*) from resolution_permissions where resolution_id=processStepResolutionId)>0 or
+       (select count(*) from process_history where resolution_id=processStepResolutionId)>0 then
+        return false;
+    end if;
+
+
+    DELETE
+    from process_step_resolutions
+    where id = processStepResolutionId;
+
+    return true;
+END
+$func$ LANGUAGE plpgsql;
+
+-- processes
+
+create or replace function public.EditProcessCreatedFromProcessId(
+    processId bigint,
+    newCreatedFromProcessId bigint
+)
+    returns bool
+as
+$func$
+BEGIN
+    if (select count(*) from processes where id = processId) = 0 or
+       (select count(*) from runnable_processes where id = newCreatedFromProcessId) = 0 then
+        return false;
+    end if;
+    update processes
+    set created_from_process_id=newCreatedFromProcessId
+    where id = processId;
+
+    return true;
+END
+$func$ LANGUAGE plpgsql;
+
+create or replace function public.EditProcessCurrentStepId(
+    processId bigint,
+    newCurrentStepId bigint
+)
+    returns bool
+as
+$func$
+BEGIN
+    if (select count(*) from processes where id = processId) = 0 or
+       (select count(*) from process_steps where id = newCurrentStepId) = 0 then
+        return false;
+    end if;
+    update processes
+    set current_step_id=newCurrentStepId
+    where id = processId;
+
+    return true;
+END
+$func$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION public.DeleteProcess(
+    processId bigint)
+    RETURNS bool
+AS
+$func$
+BEGIN
+    if (select count(*) from processes where id = processId) = 0 then
+        return false;
+    end if;
+
+    if (select count(*) from process_history where process_id=processId)>0 then
+        return false;
+    end if;
+
+
+    DELETE
+    from processes
+    where id = processId;
+
+    return true;
+END
+$func$ LANGUAGE plpgsql;
+
+-- runnable_processes
+
+create or replace function public.EditRunnableProcessName(
+    runnableProcessId bigint,
+    newRunnableProcessName varchar
+)
+    returns bool
+as
+$func$
+BEGIN
+    if (select count(*) from runnable_processes where id = runnableProcessId) = 0 then
+        return false;
+    end if;
+    update runnable_processes
+    set name=newRunnableProcessName
+    where id = runnableProcessId;
+
+    return true;
+END
+$func$ LANGUAGE plpgsql;
+
+create or replace function public.EditRunnableProcessStartStepId(
+    runnableProcessId bigint,
+    newStartStepId bigint
+)
+    returns bool
+as
+$func$
+BEGIN
+    if (select count(*) from runnable_processes where id = runnableProcessId) = 0 or
+       (select count(*) from process_steps where id = newStartStepId) = 0 then
+        return false;
+    end if;
+    update runnable_processes
+    set start_step_id=newStartStepId
+    where id = runnableProcessId;
+
+    return true;
+END
+$func$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION public.DeleteRunnableProcess(
+    runnableProcessId bigint)
+    RETURNS bool
+AS
+$func$
+BEGIN
+    if (select count(*) from runnable_processes where id = runnableProcessId) = 0 then
+        return false;
+    end if;
+
+    if (select count(*) from processes where created_from_process_id=runnableProcessId)>0 or
+       (select count(*) from process_permissions where process_id=runnableProcessId)>0 then
+        return false;
+    end if;
+
+
+    DELETE
+    from runnable_processes
+    where id = runnableProcessId;
+
+    return true;
+END
+$func$ LANGUAGE plpgsql;
+
+-- users
+
+create or replace function public.EditUser(
+    userId bigint,
+    newUserName varchar
+)
+    returns bool
+as
+$func$
+BEGIN
+    if (select count(*) from users where id = userId) = 0 then
+        return false;
+    end if;
+    update users
+    set name=newUserName
+    where id = userId;
+
+    return true;
+END
+$func$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION public.DeleteUser(
+    userId bigint)
+    RETURNS bool
+AS
+$func$
+BEGIN
+    if (select count(*) from users where id = userId) = 0 then
+        return false;
+    end if;
+
+    if (select count(*) from user_roles where user_id=userId)>0 or
+       (select count(*) from process_history where performed_by_user_id=userId)>0 then
+        return false;
+    end if;
+
+
+    DELETE
+    from users
+    where id = userId;
+
+    return true;
+END
+$func$ LANGUAGE plpgsql;
+
+-- process_history
+
+create or replace function public.EditProcessHistoryPerfomedAt(
+    processHistoryId bigint,
+    newPerfomedAt timestamp
+)
+    returns bool
+as
+$func$
+BEGIN
+    if (select count(*) from process_history where id = processHistoryId) = 0 then
+        return false;
+    end if;
+    update process_history
+    set performed_at=newPerfomedAt
+    where id = processHistoryId;
+
+    return true;
+END
+$func$ LANGUAGE plpgsql;
+
+create or replace function public.EditProcessHistoryProcessId(
+    processHistoryId bigint,
+    newProcessId bigint
+)
+    returns bool
+as
+$func$
+BEGIN
+    if (select count(*) from process_history where id = processHistoryId) = 0 or
+       (select count(*) from processes where id = newProcessId) = 0 then
+        return false;
+    end if;
+    update process_history
+    set process_id=newProcessId
+    where id = processHistoryId;
+
+    return true;
+END
+$func$ LANGUAGE plpgsql;
+
+create or replace function public.EditProcessHistoryPerfomedByUserId(
+    processHistoryId bigint,
+    newPerfomedByUserId bigint
+)
+    returns bool
+as
+$func$
+BEGIN
+    if (select count(*) from process_history where id = processHistoryId) = 0 or
+       (select count(*) from users where id = newPerfomedByUserId) = 0 then
+        return false;
+    end if;
+    update process_history
+    set performed_by_user_id=newPerfomedByUserId
+    where id = processHistoryId;
+
+    return true;
+END
+$func$ LANGUAGE plpgsql;
+
+create or replace function public.EditProcessHistoryResolutionId(
+    processHistoryId bigint,
+    newResolutionId bigint
+)
+    returns bool
+as
+$func$
+BEGIN
+    if (select count(*) from process_history where id = processHistoryId) = 0 or
+       (select count(*) from process_step_resolutions where id = newResolutionId) = 0 then
+        return false;
+    end if;
+    update process_history
+    set resolution_id=newResolutionId
+    where id = processHistoryId;
+
+    return true;
+END
+$func$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION public.DeleteProcessHistory(
+    processHistoryId bigint)
+    RETURNS bool
+AS
+$func$
+BEGIN
+    if (select count(*) from process_history where id = processHistoryId) = 0 then
+        return false;
+    end if;
+
+    DELETE
+    from process_history
+    where id = processHistoryId;
+
+    return true;
+END
+$func$ LANGUAGE plpgsql;
+
+-- resolution_permissions
+
+create or replace function public.EditResolutionPermissionsResolutionId(
+    resolutionPermissionId bigint,
+    newResolutionId bigint
+)
+    returns bool
+as
+$func$
+BEGIN
+    if (select count(*) from resolution_permissions where id = resolutionPermissionId) = 0 or
+       (select count(*) from process_step_resolutions where id = newResolutionId) = 0 then
+        return false;
+    end if;
+    update resolution_permissions
+    set resolution_id=newResolutionId
+    where id = resolutionPermissionId;
+
+    return true;
+END
+$func$ LANGUAGE plpgsql;
+
+create or replace function public.EditResolutionPermissionsRoleId(
+    resolutionPermissionId bigint,
+    newRoleId bigint
+)
+    returns bool
+as
+$func$
+BEGIN
+    if (select count(*) from resolution_permissions where id = resolutionPermissionId) = 0 or
+       (select count(*) from users where id = newRoleId) = 0 then
+        return false;
+    end if;
+    update resolution_permissions
+    set role_id=newRoleId
+    where id = resolutionPermissionId;
+
+    return true;
+END
+$func$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION public.DeleteResolutionPermission(
+    resolutionPermission bigint)
+    RETURNS bool
+AS
+$func$
+BEGIN
+    if (select count(*) from resolution_permissions where id = resolutionPermission) = 0 then
+        return false;
+    end if;
+
+    DELETE
+    from resolution_permissions
+    where id = resolutionPermission;
+
+    return true;
+END
+$func$ LANGUAGE plpgsql;
+
+-- user_roles
+
+create or replace function public.EditUserRolesUserId(
+    userRolesId bigint,
+    newUserId bigint
+)
+    returns bool
+as
+$func$
+BEGIN
+    if (select count(*) from user_roles where id = userRolesId) = 0 or
+       (select count(*) from users where id = newUserId) = 0 then
+        return false;
+    end if;
+    update user_roles
+    set user_id=newUserId
+    where id = userRolesId;
+
+    return true;
+END
+$func$ LANGUAGE plpgsql;
+
+create or replace function public.EditUserRolesRoleId(
+    userRolesId bigint,
+    newRoleId bigint
+)
+    returns bool
+as
+$func$
+BEGIN
+    if (select count(*) from user_roles where id = userRolesId) = 0 or
+       (select count(*) from roles where id = newRoleId) = 0 then
+        return false;
+    end if;
+    update user_roles
+    set role_id=newRoleId
+    where id = userRolesId;
+
+    return true;
+END
+$func$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION public.DeleteUserRole(
+    userRoleId bigint)
+    RETURNS bool
+AS
+$func$
+BEGIN
+    if (select count(*) from user_roles where id = userRoleId) = 0 then
+        return false;
+    end if;
+
+    DELETE
+    from user_roles
+    where id = userRoleId;
+
+    return true;
+END
+$func$ LANGUAGE plpgsql;
+
+-- process_permissions
+
+create or replace function public.EditProcessPermissionsProcessId(
+    processPermissionId bigint,
+    newProcessId bigint
+)
+    returns bool
+as
+$func$
+BEGIN
+    if (select count(*) from process_permissions where id = processPermissionId) = 0 or
+       (select count(*) from runnable_processes where id = newProcessId) = 0 then
+        return false;
+    end if;
+    update process_permissions
+    set process_id=newProcessId
+    where id = processPermissionId;
+
+    return true;
+END
+$func$ LANGUAGE plpgsql;
+
+create or replace function public.EditProcessPermissionsRoleId(
+    processPermissionId bigint,
+    newRoleId bigint
+)
+    returns bool
+as
+$func$
+BEGIN
+    if (select count(*) from process_permissions where id = processPermissionId) = 0 or
+       (select count(*) from roles where id = newRoleId) = 0 then
+        return false;
+    end if;
+    update process_permissions
+    set role_id=newRoleId
+    where id = processPermissionId;
+
+    return true;
+END
+$func$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION public.DeleteProcessPermission(
+    processPermissionId bigint)
+    RETURNS bool
+AS
+$func$
+BEGIN
+    if (select count(*) from process_permissions where id = processPermissionId) = 0 then
+        return false;
+    end if;
+
+    DELETE
+    from process_permissions
+    where id = processPermissionId;
+
+    return true;
+END
+$func$ LANGUAGE plpgsql;
