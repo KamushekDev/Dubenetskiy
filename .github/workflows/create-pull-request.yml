@@ -22,6 +22,7 @@ jobs:
           team-reviewers: |
             owners
             maintainers
+          base: master
 
       - name: Check outputs
         run: |
