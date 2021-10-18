@@ -14,9 +14,9 @@ jobs:
           base: master
           branch: ${{ github.ref }}
           delete-branch: true
-          title: '[Example] Update report'
+          title: ${{ github.event.head_commit.message }}
+          commit-message: PR from ${{ github.ref }} to master
           labels: |
-            report
             automated pr
           assignees: ${{ github.actor }}
           reviewers: kamushekDev
