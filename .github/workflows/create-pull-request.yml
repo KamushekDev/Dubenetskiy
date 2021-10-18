@@ -1,0 +1,29 @@
+name: create-pull-request
+on: [push]
+jobs:
+  createPullRequest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Create Pull Request
+        id: cpr
+        uses: peter-evans/create-pull-request@v3
+        with:
+          token: ${{ secrets.TOKEN }}
+          branch: test
+          delete-branch: true
+          title: '[Example] Update report'
+          labels: |
+            report
+            automated pr
+          assignees: ${{ github.actor }}
+          reviewers: kamushekDev
+          team-reviewers: |
+            owners
+            maintainers
+
+      - name: Check outputs
+        run: |
+          echo "Pull Request Number - ${{ steps.cpr.outputs.pull-request-number }}"
+          echo "Pull Request URL - ${{ steps.cpr.outputs.pull-request-url }}"
