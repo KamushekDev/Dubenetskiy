@@ -11,7 +11,7 @@ jobs:
         uses: peter-evans/create-pull-request@v3
         with:
           token: ${{ secrets.TOKEN }}
-          branch: ${{ github.ref }}
+          branch: ${{ github.ref }}-PR
           delete-branch: true
           title: '[Example] Update report'
           labels: |
