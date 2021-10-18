@@ -11,6 +11,7 @@ jobs:
         uses: peter-evans/create-pull-request@v3
         with:
           token: ${{ secrets.TOKEN }}
+          base: master
           branch: ${{ github.ref }}
           delete-branch: true
           title: '[Example] Update report'
@@ -22,7 +23,6 @@ jobs:
           team-reviewers: |
             owners
             maintainers
-          base: master
 
       - name: Check outputs
         run: |
