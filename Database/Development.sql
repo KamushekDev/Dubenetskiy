@@ -1167,3 +1167,32 @@ BEGIN
     return true;
 END
 $func$ LANGUAGE plpgsql;
+
+-- product_classes
+
+create or replace function public.EditProductClassesName(
+    productClassId bigint,
+    newName varchar
+)
+    returns bool
+as
+$func$
+BEGIN
+    if (select count(*) from product_classes where id = productClassId) = 0 then
+        return false;
+    end if;
+    update product_classes
+    set name=newName
+    where id = productClassId;
+
+    return true;
+END
+$func$ LANGUAGE plpgsql;
+
+-- units
+
+-- products
+
+-- parameters
+
+-- product_parameters
