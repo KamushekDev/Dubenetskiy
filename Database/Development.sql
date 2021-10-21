@@ -470,7 +470,7 @@ select EditRoleName(11, 'Test2');
 select EditRoleParent(11, 8);
 
 CREATE OR REPLACE FUNCTION public.DeleteRole(
-    roleId bigint)
+    roleId bigint, isForce bool)
     RETURNS bool
 AS
 $func$
@@ -479,13 +479,34 @@ BEGIN
         return false;
     end if;
 
-    if (select count(*) from process_permissions where role_id=roleId)>0 or
+    if not isForce and
+       ((select count(*) from process_permissions where role_id=roleId)>0 or
        (select count(*) from user_roles where role_id=roleId)>0 or
-       (select count(*) from resolution_permissions where roleId=roleId)>0 or
-       (select count(*) from roles where parent_id=roleId)>0 then
+       (select count(*) from resolution_permissions where role_id=roleId)>0 or
+       (select count(*) from roles where parent_id=roleId)>0) then
         return false;
     end if;
 
+    if (select count(*) from process_permissions where role_id=roleId)<>0 then
+        update process_permissions
+        set role_id=null
+        where role_id=roleId;
+    end if;
+    if (select count(*) from user_roles where role_id=roleId)<>0 then
+        update user_roles
+        set role_id=null
+        where role_id=roleId;
+    end if;
+    if (select count(*) from resolution_permissions where role_id=roleId)<>0 then
+        update resolution_permissions
+        set role_id=null
+        where role_id=roleId;
+    end if;
+    if (select count(*) from roles where parent_id=roleId)<>0 then
+        update roles
+        set parent_id=null
+        where parent_id=roleId;
+    end if;
 
     DELETE
     from roles
@@ -521,7 +542,7 @@ $func$ LANGUAGE plpgsql;
 select editstep(7, 'Очень тестовый шаг');
 
 CREATE OR REPLACE FUNCTION public.DeleteStep(
-    stepId bigint)
+    stepId bigint, isForce bool)
     RETURNS bool
 AS
 $func$
@@ -530,13 +551,34 @@ BEGIN
         return false;
     end if;
 
-    if (select count(*) from runnable_processes where start_step_id=stepId)>0 or
+    if not isForce and
+       ((select count(*) from runnable_processes where start_step_id=stepId)>0 or
        (select count(*) from process_step_resolutions where current_step_id=stepId)>0 or
        (select count(*) from process_step_resolutions where next_step_id=stepId)>0 or -- ???
-       (select count(*) from processes where current_step_id=stepId)>0 then
+       (select count(*) from processes where current_step_id=stepId)>0) then
         return false;
     end if;
 
+    if (select count(*) from runnable_processes where start_step_id=stepId)<>0 then
+        update runnable_processes
+        set start_step_id=null
+        where start_step_id=stepId;
+    end if;
+    if (select count(*) from process_step_resolutions where current_step_id=stepId)<>0 then
+        update process_step_resolutions
+        set current_step_id=null
+        where current_step_id=stepId;
+    end if;
+    if (select count(*) from process_step_resolutions where next_step_id=stepId)<>0 then
+        update process_step_resolutions
+        set next_step_id=null
+        where next_step_id=stepId;
+    end if;
+    if (select count(*) from processes where current_step_id=stepId)<>0 then
+        update processes
+        set current_step_id=null
+        where current_step_id=stepId;
+    end if;
 
     DELETE
     from process_steps
@@ -610,7 +652,7 @@ END
 $func$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION public.DeleteProcessStepResolution(
-    processStepResolutionId bigint)
+    processStepResolutionId bigint, isForce bool)
     RETURNS bool
 AS
 $func$
@@ -619,11 +661,22 @@ BEGIN
         return false;
     end if;
 
-    if (select count(*) from resolution_permissions where resolution_id=processStepResolutionId)>0 or
-       (select count(*) from process_history where resolution_id=processStepResolutionId)>0 then
+    if not isForce and
+       ((select count(*) from resolution_permissions where resolution_id=processStepResolutionId)>0 or
+       (select count(*) from process_history where resolution_id=processStepResolutionId)>0) then
         return false;
     end if;
 
+    if (select count(*) from resolution_permissions where resolution_id=processStepResolutionId)<>0 then
+        update resolution_permissions
+        set resolution_id=null
+        where resolution_id=processStepResolutionId;
+    end if;
+    if (select count(*) from process_history where resolution_id=processStepResolutionId)<>0 then
+        update process_history
+        set resolution_id=null
+        where resolution_id=processStepResolutionId;
+    end if;
 
     DELETE
     from process_step_resolutions
@@ -676,7 +729,7 @@ END
 $func$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION public.DeleteProcess(
-    processId bigint)
+    processId bigint, isForce bool)
     RETURNS bool
 AS
 $func$
@@ -685,10 +738,16 @@ BEGIN
         return false;
     end if;
 
-    if (select count(*) from process_history where process_id=processId)>0 then
+    if not isForce and
+       (select count(*) from process_history where process_id=processId)>0 then
         return false;
     end if;
 
+    if (select count(*) from process_history where process_id=processId)<>0 then
+        update process_history
+        set process_id=null
+        where process_id=processId;
+    end if;
 
     DELETE
     from processes
@@ -740,7 +799,7 @@ END
 $func$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION public.DeleteRunnableProcess(
-    runnableProcessId bigint)
+    runnableProcessId bigint, isForce bool)
     RETURNS bool
 AS
 $func$
@@ -749,11 +808,22 @@ BEGIN
         return false;
     end if;
 
-    if (select count(*) from processes where created_from_process_id=runnableProcessId)>0 or
-       (select count(*) from process_permissions where process_id=runnableProcessId)>0 then
+    if not isForce and
+       ((select count(*) from processes where created_from_process_id=runnableProcessId)>0 or
+       (select count(*) from process_permissions where process_id=runnableProcessId)>0) then
         return false;
     end if;
 
+    if (select count(*) from processes where created_from_process_id=runnableProcessId)<>0 then
+        update processes
+        set created_from_process_id=null
+        where created_from_process_id=runnableProcessId;
+    end if;
+    if (select count(*) from process_permissions where process_id=runnableProcessId)<>0 then
+        update process_permissions
+        set process_id=null
+        where process_id=runnableProcessId;
+    end if;
 
     DELETE
     from runnable_processes
@@ -785,7 +855,7 @@ END
 $func$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION public.DeleteUser(
-    userId bigint)
+    userId bigint, isForce bool)
     RETURNS bool
 AS
 $func$
@@ -794,11 +864,22 @@ BEGIN
         return false;
     end if;
 
-    if (select count(*) from user_roles where user_id=userId)>0 or
-       (select count(*) from process_history where performed_by_user_id=userId)>0 then
+    if not isForce and
+       ((select count(*) from user_roles where user_id=userId)<>0 or
+       (select count(*) from process_history where performed_by_user_id=userId)<>0) then
         return false;
     end if;
 
+    if (select count(*) from user_roles where user_id=userId)<>0 then
+        update user_roles
+        set user_id=null
+        where user_id=userId;
+    end if;
+    if (select count(*) from process_history where performed_by_user_id=userId)<>0 then
+        update process_history
+        set performed_by_user_id=null
+        where performed_by_user_id=userId;
+    end if;
 
     DELETE
     from users
@@ -1070,7 +1151,7 @@ END
 $func$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION public.DeleteProcessPermission(
-    processPermissionId bigint)
+    processPermissionId bigint, isForce bool)
     RETURNS bool
 AS
 $func$
