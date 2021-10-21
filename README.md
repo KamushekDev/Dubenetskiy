@@ -21,9 +21,14 @@ dotnet ef dbcontext scaffold Name=Dub:Scaffold:ConnectionString Npgsql.EntityFra
 ```
 pg_dump -hlocalhost -p5433 -U postgres -W -f"/opt/pg_dump/schema.sql" -npublic -s dub
 pg_dump -hlocalhost -p5433 -U postgres -W -f"/opt/pg_dump/data.sql" -npublic -a dub
+pg_dump -hlocalhost -p5433 -U postgres -W -f"/opt/pg_dump/dump.sql" -npublic dub
+
+cp /opt/pg_dump/*.sql /mnt/c/Users/Kamushek/Repos/Dub/Database/
 ```
 
 ###  Restore database
 ```
 psql -hlocalhost -p5433 -Upostgres -W test < schema.sql
+psql -hlocalhost -p5433 -Upostgres -W test < data.sql
+psql -hlocalhost -p5433 -Upostgres -W test < dump.sql
 ```

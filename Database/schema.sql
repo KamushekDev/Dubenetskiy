@@ -162,6 +162,42 @@ $$;
 ALTER FUNCTION public.checkprocess(processid bigint) OWNER TO postgres;
 
 --
+-- Name: checkrunnableprocess(bigint); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.checkrunnableprocess(processid bigint) RETURNS void
+    LANGUAGE plpgsql
+    AS $$
+declare
+BEGIN
+    if (select count(*) from runnable_processes p where p.id = processId) = 0 then
+        raise exception 'Runnable process does not exist';
+    end if;
+END
+$$;
+
+
+ALTER FUNCTION public.checkrunnableprocess(processid bigint) OWNER TO postgres;
+
+--
+-- Name: checkstep(bigint); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.checkstep(stepid bigint) RETURNS void
+    LANGUAGE plpgsql
+    AS $$
+declare
+BEGIN
+    if (select count(*) from process_steps p where p.id = stepId) = 0 then
+        raise exception 'Runnable process does not exist';
+    end if;
+END
+$$;
+
+
+ALTER FUNCTION public.checkstep(stepid bigint) OWNER TO postgres;
+
+--
 -- Name: checkuser(bigint); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -178,51 +214,6 @@ $$;
 
 
 ALTER FUNCTION public.checkuser(userid bigint) OWNER TO postgres;
-
---
--- Name: deleteuser(bigint); Type: FUNCTION; Schema: public; Owner: postgres
---
-
-CREATE FUNCTION public.deleteuser(userid bigint) RETURNS boolean
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-    if (select count(*) from users where id = userId) = 0 then
-        return false;
-    end if;
-
-    DELETE from users
-    where id = userId;
-
-    return true;
-END
-$$;
-
-
-ALTER FUNCTION public.deleteuser(userid bigint) OWNER TO postgres;
-
---
--- Name: edituser(bigint, character varying); Type: FUNCTION; Schema: public; Owner: postgres
---
-
-CREATE FUNCTION public.edituser(userid bigint, newusername character varying) RETURNS boolean
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-    if (select count(*) from users where id = userId) = 0 then
-        return false;
-    end if;
-
-    UPDATE users
-    set name = newUsername
-    where id = userId;
-
-    return true;
-END
-$$;
-
-
-ALTER FUNCTION public.edituser(userid bigint, newusername character varying) OWNER TO postgres;
 
 --
 -- Name: getresolutions(bigint, bigint, boolean); Type: FUNCTION; Schema: public; Owner: postgres
@@ -543,7 +534,8 @@ ALTER SEQUENCE public.process_history_id_seq OWNED BY public.process_history.id;
 CREATE TABLE public.process_permissions (
     id bigint NOT NULL,
     process_id bigint NOT NULL,
-    role_id bigint
+    role_id bigint,
+    is_deleted boolean DEFAULT false NOT NULL
 );
 
 
@@ -578,7 +570,8 @@ CREATE TABLE public.process_step_resolutions (
     current_step_id bigint NOT NULL,
     next_step_id bigint NOT NULL,
     resolution_text character varying(100) NOT NULL,
-    id bigint NOT NULL
+    id bigint NOT NULL,
+    is_deleted boolean DEFAULT false NOT NULL
 );
 
 
@@ -611,7 +604,8 @@ ALTER SEQUENCE public.process_step_resolutions_id_seq OWNED BY public.process_st
 
 CREATE TABLE public.process_steps (
     id bigint NOT NULL,
-    name character varying(100) NOT NULL
+    name character varying(100) NOT NULL,
+    is_deleted boolean DEFAULT false NOT NULL
 );
 
 
@@ -645,7 +639,8 @@ ALTER SEQUENCE public.process_steps_id_seq OWNED BY public.process_steps.id;
 CREATE TABLE public.processes (
     id bigint NOT NULL,
     created_from_process_id bigint NOT NULL,
-    current_step_id bigint NOT NULL
+    current_step_id bigint NOT NULL,
+    is_deleted boolean DEFAULT false NOT NULL
 );
 
 
@@ -658,7 +653,8 @@ ALTER TABLE public.processes OWNER TO postgres;
 CREATE TABLE public.runnable_processes (
     id bigint NOT NULL,
     name character varying(100) NOT NULL,
-    start_step_id bigint NOT NULL
+    start_step_id bigint NOT NULL,
+    is_deleted boolean DEFAULT false NOT NULL
 );
 
 
@@ -795,7 +791,8 @@ ALTER TABLE public.product_parameters OWNER TO postgres;
 CREATE TABLE public.resolution_permissions (
     id bigint NOT NULL,
     resolution_id bigint NOT NULL,
-    role_id bigint
+    role_id bigint,
+    is_deleted boolean DEFAULT false NOT NULL
 );
 
 
@@ -829,7 +826,8 @@ ALTER SEQUENCE public.resolution_permissions_id_seq OWNED BY public.resolution_p
 CREATE TABLE public.roles (
     id bigint NOT NULL,
     name character varying(100) NOT NULL,
-    parent_id bigint
+    parent_id bigint,
+    is_deleted boolean DEFAULT false NOT NULL
 );
 
 
@@ -897,7 +895,8 @@ CREATE TABLE public.user_roles (
     id bigint NOT NULL,
     user_id bigint NOT NULL,
     role_id bigint NOT NULL,
-    assigned_at timestamp without time zone NOT NULL
+    assigned_at timestamp without time zone NOT NULL,
+    is_deleted boolean DEFAULT false NOT NULL
 );
 
 
@@ -930,7 +929,8 @@ ALTER SEQUENCE public.user_roles_id_seq OWNED BY public.user_roles.id;
 
 CREATE TABLE public.users (
     id bigint NOT NULL,
-    name character varying(100) NOT NULL
+    name character varying(100) NOT NULL,
+    is_deleted boolean DEFAULT false NOT NULL
 );
 
 
