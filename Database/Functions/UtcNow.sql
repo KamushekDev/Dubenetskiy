@@ -7,4 +7,3 @@ BEGIN
     return timezone('UTC', now());
 END
 $func$ LANGUAGE plpgsql;
-
