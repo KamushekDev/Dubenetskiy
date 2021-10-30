@@ -62,6 +62,10 @@ COPY public.process_step_resolutions (current_step_id, next_step_id, resolution_
 2	1	Тестовая параша 3	10	f
 5	1	Тестовая параша 4	11	f
 1	8	Тестовый текст	12	f
+1	3	Тест говна	17	f
+2	8	Тест говна	18	f
+3	8	Тест говна	24	f
+5	8	Тест говна	25	f
 \.
 
 
@@ -127,6 +131,7 @@ COPY public.roles (id, name, parent_id, is_deleted) FROM stdin;
 9	Warehouse worker	8	f
 10	Logistic worker	7	f
 6	admin	\N	f
+12	Test1	10	f
 \.
 
 
@@ -185,6 +190,13 @@ COPY public.resolution_permissions (id, resolution_id, role_id, is_deleted) FROM
 6	10	7	f
 7	11	6	f
 8	12	\N	f
+9	17	7	f
+10	17	8	f
+11	17	10	f
+12	17	6	f
+13	18	\N	f
+14	24	\N	f
+15	25	\N	f
 \.
 
 
@@ -226,7 +238,7 @@ SELECT pg_catalog.setval('public.process_permissions_id_seq', 4, true);
 -- Name: process_step_resolutions_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.process_step_resolutions_id_seq', 12, true);
+SELECT pg_catalog.setval('public.process_step_resolutions_id_seq', 25, true);
 
 
 --
@@ -268,14 +280,14 @@ SELECT pg_catalog.setval('public.product_id_seq', 1, true);
 -- Name: resolution_permissions_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.resolution_permissions_id_seq', 8, true);
+SELECT pg_catalog.setval('public.resolution_permissions_id_seq', 15, true);
 
 
 --
 -- Name: roles_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.roles_id_seq', 11, true);
+SELECT pg_catalog.setval('public.roles_id_seq', 12, true);
 
 
 --
