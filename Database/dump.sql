@@ -36,29 +36,34 @@ COMMENT ON SCHEMA public IS 'standard public schema';
 -- Name: addprocess(character varying, bigint, bigint[]); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
-CREATE FUNCTION public.addprocess(processname character varying, startstepid bigint, roleids bigint[] DEFAULT ARRAY[]::bigint[], OUT process_id integer) RETURNS integer
+CREATE FUNCTION public.addprocess(processname character varying, startstepid bigint, roleids bigint[] DEFAULT ARRAY[]::bigint[]) RETURNS bigint
     LANGUAGE plpgsql
     AS $$
 declare
-    roleId bigint;
+    roleId       bigint;
+    newProcessId bigint;
 BEGIN
+    perform CheckStep(startStepId);
+
     INSERT INTO runnable_processes (name, start_step_id)
     values (processName, startStepId)
-    RETURNING id INTO process_id;
+    RETURNING id INTO newProcessId;
 
-    foreach roleId in array roleIds
+    for roleId in select fr.filtered_role_id from GetFilteredRoles(roleIds) fr
         loop
-            INSERT INTO process_permissions (process_id, role_id)    values (process_id, roleId);
+            INSERT INTO process_permissions (process_id, role_id) values (newProcessId, roleId);
         end loop;
 
-    if cardinality(roleIds) = 0 then
-        INSERT INTO process_permissions (process_id, role_id)    values (process_id, null);
+    if not exists(select 1 from process_permissions where process_id = newProcessId) then
+        INSERT INTO process_permissions (process_id, role_id) values (newProcessId, null);
     end if;
+
+    return newProcessId;
 END
 $$;
 
 
-ALTER FUNCTION public.addprocess(processname character varying, startstepid bigint, roleids bigint[], OUT process_id integer) OWNER TO postgres;
+ALTER FUNCTION public.addprocess(processname character varying, startstepid bigint, roleids bigint[]) OWNER TO postgres;
 
 --
 -- Name: addrole(character varying, bigint); Type: FUNCTION; Schema: public; Owner: postgres
@@ -69,11 +74,14 @@ CREATE FUNCTION public.addrole(rolename character varying, parentroleid bigint D
     AS $$
 BEGIN
     if parentRoleId is null then
-        if (select count(*)
-            from roles
-            where parent_id is null) > 0 then
+        if EXISTS(select 1
+                  from roles
+                  where parent_id is null
+                    and is_deleted = false) then
             raise exception 'Main role is already exists';
         end if;
+    else
+        perform CheckRole(parentRoleId);
     end if;
 
     INSERT INTO roles (name, parent_id)
@@ -86,62 +94,34 @@ $$;
 ALTER FUNCTION public.addrole(rolename character varying, parentroleid bigint, OUT role_id integer) OWNER TO postgres;
 
 --
--- Name: addstep(character varying); Type: FUNCTION; Schema: public; Owner: postgres
---
-
-CREATE FUNCTION public.addstep(stepname character varying, OUT step_id integer) RETURNS integer
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-    INSERT INTO process_steps (name)
-    values (stepName)
-    RETURNING id INTO step_id;
-END
-$$;
-
-
-ALTER FUNCTION public.addstep(stepname character varying, OUT step_id integer) OWNER TO postgres;
-
---
--- Name: adduser(character varying); Type: FUNCTION; Schema: public; Owner: postgres
---
-
-CREATE FUNCTION public.adduser(username character varying, OUT user_id integer) RETURNS integer
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-    INSERT INTO users (name)
-    values (username)
-    RETURNING id INTO user_id;
-END
-$$;
-
-
-ALTER FUNCTION public.adduser(username character varying, OUT user_id integer) OWNER TO postgres;
-
---
 -- Name: assignrole(bigint, bigint); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
-CREATE FUNCTION public.assignrole(userid bigint, roleid bigint, OUT user_role_id integer) RETURNS integer
+CREATE FUNCTION public.assignrole(userid bigint, roleid bigint) RETURNS bigint
     LANGUAGE plpgsql
     AS $$
 declare
-    existing bigint;
+    existing  bigint;
+    newRoleId bigint;
 BEGIN
-    existing = (select id from user_roles where user_id = userId and role_id = roleId);
+    perform CheckUser(userId);
+    perform CheckRole(roleId);
+
+    existing = (select id from user_roles where user_id = userId and role_id = roleId and is_deleted = false);
     if existing is not null then
-        user_role_id = existing;
-        return;
+        return existing;
     end if;
+
     INSERT INTO user_roles (user_id, role_id, assigned_at)
     values (userId, roleId, UtcNow())
-    RETURNING id INTO user_role_id;
+    RETURNING id INTO newRoleId;
+
+    return newRoleId;
 END
 $$;
 
 
-ALTER FUNCTION public.assignrole(userid bigint, roleid bigint, OUT user_role_id integer) OWNER TO postgres;
+ALTER FUNCTION public.assignrole(userid bigint, roleid bigint) OWNER TO postgres;
 
 --
 -- Name: checkprocess(bigint); Type: FUNCTION; Schema: public; Owner: postgres
@@ -152,7 +132,7 @@ CREATE FUNCTION public.checkprocess(processid bigint) RETURNS void
     AS $$
 declare
 BEGIN
-   if (select count(*) from processes p where p.id = processId) = 0 then
+    if not exists(select 1 from processes p where p.id = processId and is_deleted = false) then
         raise exception 'Process does not exist';
     end if;
 END
@@ -160,6 +140,80 @@ $$;
 
 
 ALTER FUNCTION public.checkprocess(processid bigint) OWNER TO postgres;
+
+--
+-- Name: checkprocesspermission(bigint); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.checkprocesspermission(processpermissionid bigint) RETURNS void
+    LANGUAGE plpgsql
+    AS $$
+declare
+BEGIN
+    if not exists (select 1 from process_permissions p where p.id = processPermissionId and is_deleted = false) then
+        raise exception 'Process permission does not exist';
+    end if;
+END
+$$;
+
+
+ALTER FUNCTION public.checkprocesspermission(processpermissionid bigint) OWNER TO postgres;
+
+--
+-- Name: checkresolution(bigint); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.checkresolution(resolutionid bigint) RETURNS void
+    LANGUAGE plpgsql
+    AS $$
+declare
+BEGIN
+    if not exists(select 1 from process_step_resolutions u where u.id = resolutionId and is_deleted = false) then
+        raise exception 'Resolution does not exist';
+    end if;
+END
+$$;
+
+
+ALTER FUNCTION public.checkresolution(resolutionid bigint) OWNER TO postgres;
+
+--
+-- Name: checkresolutionpermission(bigint); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.checkresolutionpermission(resolutionpermissionid bigint) RETURNS void
+    LANGUAGE plpgsql
+    AS $$
+declare
+BEGIN
+    if not exists(select 1
+                  from resolution_permissions rp
+                  where rp.id = resolutionPermissionId and is_deleted = false) then
+        raise exception 'Resolution permission does not exist';
+    end if;
+END
+$$;
+
+
+ALTER FUNCTION public.checkresolutionpermission(resolutionpermissionid bigint) OWNER TO postgres;
+
+--
+-- Name: checkrole(bigint); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.checkrole(roleid bigint) RETURNS void
+    LANGUAGE plpgsql
+    AS $$
+declare
+BEGIN
+    if NOT EXISTS(select 1 from roles p where p.id = roleId and is_deleted = false) then
+        raise exception 'Role does not exist';
+    end if;
+END
+$$;
+
+
+ALTER FUNCTION public.checkrole(roleid bigint) OWNER TO postgres;
 
 --
 -- Name: checkrunnableprocess(bigint); Type: FUNCTION; Schema: public; Owner: postgres
@@ -170,7 +224,7 @@ CREATE FUNCTION public.checkrunnableprocess(processid bigint) RETURNS void
     AS $$
 declare
 BEGIN
-    if (select count(*) from runnable_processes p where p.id = processId) = 0 then
+    if not exists(select 1 from runnable_processes p where p.id = processId and is_deleted = false) then
         raise exception 'Runnable process does not exist';
     end if;
 END
@@ -188,8 +242,8 @@ CREATE FUNCTION public.checkstep(stepid bigint) RETURNS void
     AS $$
 declare
 BEGIN
-    if (select count(*) from process_steps p where p.id = stepId) = 0 then
-        raise exception 'Runnable process does not exist';
+    if not exists (select 1 from process_steps p where p.id = stepId and is_deleted = false) then
+        raise exception 'Step does not exist';
     end if;
 END
 $$;
@@ -206,7 +260,7 @@ CREATE FUNCTION public.checkuser(userid bigint) RETURNS void
     AS $$
 declare
 BEGIN
-    if (select count(*) from users u where u.id = userId) = 0 then
+    if not exists(select 1 from users u where u.id = userId and is_deleted = false) then
         raise exception 'User does not exist';
     end if;
 END
@@ -214,6 +268,631 @@ $$;
 
 
 ALTER FUNCTION public.checkuser(userid bigint) OWNER TO postgres;
+
+--
+-- Name: deleteprocess(bigint, boolean); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.deleteprocess(processid bigint, isforce boolean DEFAULT false) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $$
+declare
+    tempId bigint;
+BEGIN
+    perform CheckProcess(processId);
+
+    if not isForce and
+       exists (select 1 from process_permissions where process_id = processId) then
+        raise exception 'Process has dependencies';
+    end if;
+
+    for tempId in (select id
+                   from process_permissions
+                   where process_id = processId
+                     and is_deleted = false)
+        loop
+            perform DeleteProcessPermission(tempId);
+        end loop;
+
+    UPDATE public.processes
+    set is_deleted = true
+    where id = processId;
+
+    return true;
+END
+$$;
+
+
+ALTER FUNCTION public.deleteprocess(processid bigint, isforce boolean) OWNER TO postgres;
+
+--
+-- Name: deleteprocesspermission(bigint); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.deleteprocesspermission(processpermissionid bigint) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    perform CheckProcessPermission(processPermissionId);
+
+    UPDATE process_permissions
+    set is_deleted = true
+    where id = processPermissionId;
+
+    return true;
+END
+$$;
+
+
+ALTER FUNCTION public.deleteprocesspermission(processpermissionid bigint) OWNER TO postgres;
+
+--
+-- Name: deleteprocessstepresolution(bigint, boolean); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.deleteprocessstepresolution(resolutionid bigint, isforce boolean DEFAULT false) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $$
+declare
+    tempId bigint;
+BEGIN
+    perform CheckResolution(resolutionId);
+
+    if not isForce and
+       (exists(select 1
+               from resolution_permissions
+               where resolution_id = resolutionId
+                 and is_deleted = false)
+           ) then
+        return false;
+    end if;
+
+    for tempId in (select id
+                   from resolution_permissions
+                   where resolution_id = resolutionId
+                     and is_deleted = false)
+        loop
+            perform DeleteProcessStepResolution(tempId);
+        end loop;
+
+    UPDATE process_step_resolutions
+    set is_deleted = true
+    where id = resolutionId;
+
+    return true;
+END
+$$;
+
+
+ALTER FUNCTION public.deleteprocessstepresolution(resolutionid bigint, isforce boolean) OWNER TO postgres;
+
+--
+-- Name: deleteresolutionpermission(bigint); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.deleteresolutionpermission(resolutionpermissionid bigint) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    perform CheckResolutionPermission(resolutionPermissionId);
+
+    UPDATE public.resolution_permissions
+    set is_deleted = true
+    where id = resolutionPermissionId;
+
+    return true;
+END
+$$;
+
+
+ALTER FUNCTION public.deleteresolutionpermission(resolutionpermissionid bigint) OWNER TO postgres;
+
+--
+-- Name: deleterole(bigint, boolean); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.deleterole(roleid bigint, isforce boolean DEFAULT false) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    perform CheckRole(roleId);
+
+    if not isForce and
+       (EXISTS(select 1 from process_permissions where role_id = roleId) or
+        EXISTS(select 1 from user_roles where role_id = roleId) or
+        EXISTS(select 1 from resolution_permissions where role_id = roleId) or
+        EXISTS(select 1 from roles where parent_id = roleId)
+           ) then
+        return false;
+    end if;
+
+    UPDATE process_permissions
+    set is_deleted = true
+    where role_id = roleId;
+
+    UPDATE user_roles
+    set is_deleted = true
+    where role_id = roleId;
+
+    UPDATE resolution_permissions
+    set is_deleted = true
+    where role_id = roleId;
+
+    UPDATE roles
+    set is_deleted = true
+    where id = roleId;
+
+    return true;
+END
+$$;
+
+
+ALTER FUNCTION public.deleterole(roleid bigint, isforce boolean) OWNER TO postgres;
+
+--
+-- Name: deleterunnableprocess(bigint, boolean); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.deleterunnableprocess(runnableprocessid bigint, isforce boolean DEFAULT false) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $$
+declare
+    tempId bigint;
+BEGIN
+    perform CheckRunnableProcess(runnableProcessId);
+
+    if not isForce and (
+            exists(select 1 from processes where created_from_process_id = runnableProcessId) or
+            exists(select 1 from process_permissions where process_id = runnableProcessId)
+        ) then
+        raise exception 'Runnable process has dependencies';
+    end if;
+
+    for tempId in (select id
+                   from processes
+                   where created_from_process_id = runnableProcessId
+                     and is_deleted = false)
+        loop
+            perform DeleteProcess(tempId);
+        end loop;
+
+    for tempId in (select id
+                   from process_permissions
+                   where process_id = runnableProcessId
+                     and is_deleted = false)
+        loop
+            perform DeleteProcessPermission(tempId);
+        end loop;
+
+    UPDATE runnable_processes
+    set is_deleted = true
+    where id = runnableProcessId;
+
+    return true;
+END
+$$;
+
+
+ALTER FUNCTION public.deleterunnableprocess(runnableprocessid bigint, isforce boolean) OWNER TO postgres;
+
+--
+-- Name: deletestep(bigint, boolean); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.deletestep(stepid bigint, isforce boolean DEFAULT false) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    currentResolutionId bigint;
+BEGIN
+    perform CheckStep(stepId);
+
+    if not isForce and (
+            exists(select 1 from runnable_processes where start_step_id = stepId) or
+            exists(select 1 from process_step_resolutions where current_step_id = stepId or next_step_id = stepId) or
+            exists(select 1 from processes where current_step_id = stepId)
+        ) then
+        raise exception 'Step has dependencies';
+    end if;
+
+    if (
+            exists(select 1 from runnable_processes where start_step_id = stepId) or
+            exists(select 1 from processes where current_step_id = stepId)
+        ) then
+        raise exception 'Step has dominator object(s) and thus can''t be deleted';
+    end if;
+
+    for currentResolutionId in (select id
+                                from process_step_resolutions
+                                where current_step_id = stepId
+                                   or next_step_id = stepId)
+        loop
+            perform DeleteProcessStepResolution(currentResolutionId, true);
+        end loop;
+
+    UPDATE process_steps
+    set is_deleted = true
+    where id = stepId;
+
+    return true;
+END
+$$;
+
+
+ALTER FUNCTION public.deletestep(stepid bigint, isforce boolean) OWNER TO postgres;
+
+--
+-- Name: deleteuser(bigint, boolean); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.deleteuser(userid bigint, isforce boolean DEFAULT false) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $$
+declare
+    tempId bigint;
+BEGIN
+    perform CheckUser(userId);
+
+    if not isForce and (
+            exists(select 1 from user_roles where user_id = userId)
+        ) then
+        return false;
+    end if;
+
+    for tempId in (select id
+                   from user_roles
+                   where user_id = userId
+                     and is_deleted = false)
+        loop
+            perform DeleteRole(tempId, true);
+        end loop;
+
+    UPDATE users
+    set is_deleted = true
+    where id = userId;
+
+    return true;
+END
+$$;
+
+
+ALTER FUNCTION public.deleteuser(userid bigint, isforce boolean) OWNER TO postgres;
+
+--
+-- Name: editprocesscurrentstepid(bigint, bigint); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.editprocesscurrentstepid(processid bigint, newcurrentstepid bigint) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    perform CheckProcess(processId);
+    perform CheckStep(newCurrentStepId);
+
+    UPDATE processes
+    set current_step_id=newCurrentStepId
+    where id = processId;
+
+    return true;
+END
+$$;
+
+
+ALTER FUNCTION public.editprocesscurrentstepid(processid bigint, newcurrentstepid bigint) OWNER TO postgres;
+
+--
+-- Name: editprocesspermissionsprocessid(bigint, bigint); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.editprocesspermissionsprocessid(processpermissionid bigint, newprocessid bigint) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    perform CheckProcessPermission(processPermissionId);
+    perform CheckRunnableProcess(newProcessId);
+
+    update process_permissions
+    set process_id=newProcessId
+    where id = processPermissionId;
+
+    return true;
+END
+$$;
+
+
+ALTER FUNCTION public.editprocesspermissionsprocessid(processpermissionid bigint, newprocessid bigint) OWNER TO postgres;
+
+--
+-- Name: editprocesspermissionsroleid(bigint, bigint); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.editprocesspermissionsroleid(processpermissionid bigint, newroleid bigint) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    perform CheckRole(newRoleId);
+    perform CheckProcessPermission(processPermissionId);
+
+    update process_permissions
+    set role_id=newRoleId
+    where id = processPermissionId;
+
+    return true;
+END
+$$;
+
+
+ALTER FUNCTION public.editprocesspermissionsroleid(processpermissionid bigint, newroleid bigint) OWNER TO postgres;
+
+--
+-- Name: editresolutionpermissionsresolutionid(bigint, bigint); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.editresolutionpermissionsresolutionid(resolutionpermissionid bigint, newresolutionid bigint) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    perform CheckResolution(newResolutionId);
+    perform CheckResolutionPermission(resolutionPermissionId);
+
+    update resolution_permissions
+    set resolution_id=newResolutionId
+    where id = resolutionPermissionId;
+
+    return true;
+END
+$$;
+
+
+ALTER FUNCTION public.editresolutionpermissionsresolutionid(resolutionpermissionid bigint, newresolutionid bigint) OWNER TO postgres;
+
+--
+-- Name: editresolutionpermissionsroleid(bigint, bigint); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.editresolutionpermissionsroleid(resolutionpermissionid bigint, newroleid bigint) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    perform CheckResolutionPermission(resolutionPermissionId);
+    perform CheckRole(newRoleId);
+    
+    update resolution_permissions
+    set role_id=newRoleId
+    where id = resolutionPermissionId;
+
+    return true;
+END
+$$;
+
+
+ALTER FUNCTION public.editresolutionpermissionsroleid(resolutionpermissionid bigint, newroleid bigint) OWNER TO postgres;
+
+--
+-- Name: editrolename(bigint, character varying); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.editrolename(roleid bigint, newrolename character varying) RETURNS void
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    perform CheckRole(roleId);
+
+    update roles
+    set name=newRoleName
+    where id = roleId;
+END
+$$;
+
+
+ALTER FUNCTION public.editrolename(roleid bigint, newrolename character varying) OWNER TO postgres;
+
+--
+-- Name: editroleparent(bigint, bigint); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.editroleparent(roleid bigint, newparentroleid bigint) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    perform CheckRole(roleId);
+    perform CheckRole(newParentRoleId);
+
+    update roles
+    set parent_id=newParentRoleId
+    where id = roleId;
+
+    return true;
+END
+$$;
+
+
+ALTER FUNCTION public.editroleparent(roleid bigint, newparentroleid bigint) OWNER TO postgres;
+
+--
+-- Name: editrunnableprocessname(bigint, character varying); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.editrunnableprocessname(runnableprocessid bigint, newrunnableprocessname character varying) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    perform CheckRunnableProcess(runnableProcessId);
+    
+    update runnable_processes
+    set name=newRunnableProcessName
+    where id = runnableProcessId;
+
+    return true;
+END
+$$;
+
+
+ALTER FUNCTION public.editrunnableprocessname(runnableprocessid bigint, newrunnableprocessname character varying) OWNER TO postgres;
+
+--
+-- Name: editrunnableprocessstartstepid(bigint, bigint); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.editrunnableprocessstartstepid(runnableprocessid bigint, newstartstepid bigint) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    perform CheckRunnableProcess(runnableProcessId);
+    perform CheckStep(newStartStepId);
+
+    update runnable_processes
+    set start_step_id=newStartStepId
+    where id = runnableProcessId;
+
+    return true;
+END
+$$;
+
+
+ALTER FUNCTION public.editrunnableprocessstartstepid(runnableprocessid bigint, newstartstepid bigint) OWNER TO postgres;
+
+--
+-- Name: editstepname(bigint, character varying); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.editstepname(stepid bigint, newstepname character varying) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    perform CheckStep(stepId);
+    
+    update process_steps
+    set name=newStepName
+    where id = stepId;
+
+    return true;
+END
+$$;
+
+
+ALTER FUNCTION public.editstepname(stepid bigint, newstepname character varying) OWNER TO postgres;
+
+--
+-- Name: editstepresolutioncurrentstepid(bigint, bigint); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.editstepresolutioncurrentstepid(stepresolutionid bigint, newcurrentstepid bigint) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    perform CheckResolution(stepResolutionId);
+    perform CheckStep(newCurrentStepId);
+
+    if exists(select 1
+              from process_step_resolutions
+              where next_step_id =
+                    (select next_step_id from public.process_step_resolutions where id = stepResolutionId)
+                and current_step_id = newCurrentStepId
+                and is_deleted = false
+        ) then
+        raise exception 'Resolution already exists';
+    end if;
+
+    update process_step_resolutions
+    set current_step_id=newCurrentStepId
+    where id = stepResolutionId;
+
+    return true;
+END
+$$;
+
+
+ALTER FUNCTION public.editstepresolutioncurrentstepid(stepresolutionid bigint, newcurrentstepid bigint) OWNER TO postgres;
+
+--
+-- Name: editstepresolutionnextstepid(bigint, bigint); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.editstepresolutionnextstepid(stepresolutionid bigint, newnextstepid bigint) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    perform CheckResolution(stepResolutionId);
+    perform CheckStep(newNextStepId);
+
+    if exists(select 1
+              from process_step_resolutions
+              where current_step_id =
+                    (select current_step_id from public.process_step_resolutions where id = stepResolutionId)
+                and next_step_id = newNextStepId
+                and is_deleted = false
+        ) then
+        raise exception 'Resolution already exists';
+    end if;
+
+    update process_step_resolutions
+    set next_step_id=newNextStepId
+    where id = stepResolutionId;
+
+    return true;
+END
+$$;
+
+
+ALTER FUNCTION public.editstepresolutionnextstepid(stepresolutionid bigint, newnextstepid bigint) OWNER TO postgres;
+
+--
+-- Name: editstepresolutiontext(bigint, character varying); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.editstepresolutiontext(stepresolutionid bigint, newresolutiontext character varying) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    perform CheckResolution(stepResolutionId);
+
+    update process_step_resolutions
+    set resolution_text=newResolutionText
+    where id = stepResolutionId;
+
+    return true;
+END
+$$;
+
+
+ALTER FUNCTION public.editstepresolutiontext(stepresolutionid bigint, newresolutiontext character varying) OWNER TO postgres;
+
+--
+-- Name: editusername(bigint, character varying); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.editusername(userid bigint, newusername character varying) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    perform CheckUser(userId);
+
+    UPDATE users
+    set name = newUsername
+    where id = userId;
+
+    return true;
+END
+$$;
+
+
+ALTER FUNCTION public.editusername(userid bigint, newusername character varying) OWNER TO postgres;
+
+--
+-- Name: getfilteredroles(bigint[]); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.getfilteredroles(roleids bigint[] DEFAULT ARRAY[]::bigint[]) RETURNS TABLE(filtered_role_id bigint)
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    return query select id as filtered_role_id from roles where id = ANY (roleIds) and is_deleted = false;
+END
+$$;
+
+
+ALTER FUNCTION public.getfilteredroles(roleids bigint[]) OWNER TO postgres;
 
 --
 -- Name: getresolutions(bigint, bigint, boolean); Type: FUNCTION; Schema: public; Owner: postgres
@@ -232,12 +911,18 @@ BEGIN
     if showAll = true then
         return query select psr.id, resolution_text, psr.next_step_id
                      from process_step_resolutions psr
-                     where current_step_id = currentStep;
+                     where current_step_id = currentStep
+                       and psr.is_deleted = false;
     else
         return query select psr.id, resolution_text, psr.next_step_id
                      from process_step_resolutions psr
                      where current_step_id = currentStep
-                       and (select count(*) from resolution_permissions rp where resolution_id = psr.id and IsUserSuitable(userId, rp.role_id)) > 0;
+                       and psr.is_deleted = false
+                       and exists(select 1
+                                  from resolution_permissions rp
+                                  where resolution_id = psr.id
+                                    and rp.is_deleted = false
+                                    and IsUserSuitable(userId, rp.role_id));
     end if;
 END
 $$;
@@ -249,91 +934,107 @@ ALTER FUNCTION public.getresolutions(processid bigint, userid bigint, showall bo
 -- Name: isrolesuitable(bigint, bigint); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
-CREATE FUNCTION public.isrolesuitable(roleid bigint, requiredroleid bigint, OUT is_suitable boolean) RETURNS boolean
+CREATE FUNCTION public.isrolesuitable(roleid bigint, requiredroleid bigint) RETURNS boolean
     LANGUAGE plpgsql
     AS $$
 declare
     current bigint = requiredRoleId;
 BEGIN
+    perform CheckRole(roleId);
+
+    if (requiredRoleId is null) then
+        return true;
+    end if;
+
+    perform CheckRole(requiredRoleId);
+
     while current is not null
         loop
             if (current = roleId) then
-                is_suitable = true;
-                return;
+                return true;
             end if;
-            current = (select parent_id from roles where id = current);
+            current = (select parent_id from roles where id = current and is_deleted = false);
         end loop;
-    is_suitable = false;
+    return false;
 END
 $$;
 
 
-ALTER FUNCTION public.isrolesuitable(roleid bigint, requiredroleid bigint, OUT is_suitable boolean) OWNER TO postgres;
+ALTER FUNCTION public.isrolesuitable(roleid bigint, requiredroleid bigint) OWNER TO postgres;
 
 --
 -- Name: isusersuitable(bigint, bigint); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
-CREATE FUNCTION public.isusersuitable(userid bigint, requiredroleid bigint, OUT is_suitable boolean) RETURNS boolean
+CREATE FUNCTION public.isusersuitable(userid bigint, requiredroleid bigint) RETURNS boolean
     LANGUAGE plpgsql
     AS $$
 declare
     currentRole record;
 BEGIN
+    perform checkuser(userId);
+
     if requiredRoleId is null then
-        is_suitable = true;
-        return;
+        return true;
     end if;
 
-    for currentRole in select * from user_roles where user_id = userId
+    for currentRole in select * from user_roles where user_id = userId and is_deleted = false
         loop
             if IsRoleSuitable(currentRole.role_id, requiredRoleId) = true then
-                is_suitable = true;
-                return;
+                return true;
             end if;
         end loop;
-    is_suitable = false;
+    return false;
 END
 $$;
 
 
-ALTER FUNCTION public.isusersuitable(userid bigint, requiredroleid bigint, OUT is_suitable boolean) OWNER TO postgres;
+ALTER FUNCTION public.isusersuitable(userid bigint, requiredroleid bigint) OWNER TO postgres;
 
 --
 -- Name: linksteps(bigint, bigint, character varying, bigint[]); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
-CREATE FUNCTION public.linksteps(currentstepid bigint, nextstepid bigint, text character varying, roleids bigint[] DEFAULT ARRAY[]::bigint[], OUT step_resolution_id integer) RETURNS integer
+CREATE FUNCTION public.linksteps(currentstepid bigint, nextstepid bigint, text character varying, roleids bigint[] DEFAULT ARRAY[]::bigint[]) RETURNS bigint
     LANGUAGE plpgsql
     AS $$
 declare
     existing bigint;
     roleId   bigint;
+    resultId bigint;
 BEGIN
+    perform CheckStep(currentStepId);
+    perform CheckStep(nextStepId);
+
     existing = (select id
                 from process_step_resolutions
                 where current_step_id = currentStepId
-                  and next_step_id = nextStepId);
+                  and next_step_id = nextStepId
+                  and is_deleted = false);
     if existing is not null then
         raise exception 'Resolution already exists';
     end if;
+
     INSERT INTO process_step_resolutions (current_step_id, next_step_id, resolution_text)
     values (currentStepId, nextStepId, text)
-    RETURNING id INTO step_resolution_id;
+    RETURNING id INTO resultId;
 
-    foreach roleId in array roleIds
+    for roleId
+        in select fr.filtered_role_id from GetFilteredRoles(roleIds) fr
         loop
-            insert into resolution_permissions (resolution_id, role_id) values (step_resolution_id, roleId);
+            insert into resolution_permissions (resolution_id, role_id) values (resultId, roleId);
         end loop;
 
-    if cardinality(roleIds) = 0 then
-        insert into resolution_permissions (resolution_id, role_id) values (step_resolution_id, null);
+    if not exists(select 1 from resolution_permissions where resolution_id = resultId) then
+        insert into resolution_permissions (resolution_id, role_id) values (resultId, null);
     end if;
+
+    return resultId;
 END
 $$;
 
 
-ALTER FUNCTION public.linksteps(currentstepid bigint, nextstepid bigint, text character varying, roleids bigint[], OUT step_resolution_id integer) OWNER TO postgres;
+ALTER FUNCTION public.linksteps(currentstepid bigint, nextstepid bigint, text character varying, roleids bigint[]) OWNER TO postgres;
 
 --
 -- Name: moveprocess(bigint, bigint, bigint); Type: FUNCTION; Schema: public; Owner: postgres
@@ -343,15 +1044,16 @@ CREATE FUNCTION public.moveprocess(processid bigint, userid bigint, resolutionid
     LANGUAGE plpgsql
     AS $$
 declare
-    resolution record;
-    process record;
+    resolution   record;
+    process      record;
     requiredRole record;
     isSuitable   bool = false;
 BEGIN
     perform CheckProcess(processId);
     perform CheckUser(userId);
+    perform CheckResolution(resolutionId);
 
-    for requiredRole in (select * from resolution_permissions rp where rp.resolution_id = resolutionId)
+    for requiredRole in (select * from resolution_permissions rp where rp.resolution_id = resolutionId and is_deleted = false)
         loop
             select into isSuitable from IsUserSuitable(userId, requiredRole.id);
             if isSuitable = true then
@@ -368,6 +1070,8 @@ BEGIN
     if (process.current_step_id != resolution.current_step_id) then
         raise exception 'Process'' current step does not allow that transition.';
     end if;
+
+    --todo: perform predicate check
 
     update processes
     set current_step_id = resolution.next_step_id
@@ -387,33 +1091,45 @@ ALTER FUNCTION public.moveprocess(processid bigint, userid bigint, resolutionid 
 -- Name: revokerole(bigint, bigint); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
-CREATE FUNCTION public.revokerole(userid bigint, roleid bigint, OUT user_role_id integer) RETURNS integer
+CREATE FUNCTION public.revokerole(userid bigint, roleid bigint) RETURNS void
     LANGUAGE plpgsql
     AS $$
 BEGIN
-    Delete from user_roles where user_id = userId and role_id = roleId
-    RETURNING id INTO user_role_id;
+    perform CheckUser(userId);
+    perform CheckRole(roleId);
+
+    update user_roles
+    set is_deleted = true
+    where user_id = userId
+      and role_id = roleId;
 END
 $$;
 
 
-ALTER FUNCTION public.revokerole(userid bigint, roleid bigint, OUT user_role_id integer) OWNER TO postgres;
+ALTER FUNCTION public.revokerole(userid bigint, roleid bigint) OWNER TO postgres;
 
 --
 -- Name: startprocess(bigint, bigint); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
-CREATE FUNCTION public.startprocess(runnableprocessid bigint, userid bigint, OUT new_process_id integer) RETURNS integer
+CREATE FUNCTION public.startprocess(runnableprocessid bigint, userid bigint) RETURNS bigint
     LANGUAGE plpgsql
     AS $$
 declare
-    template     record;
-    requiredRole record;
-    isSuitable   bool = false;
+    template        record;
+    requiredRole    record;
+    isSuitable      bool = false;
+    resultProcessId bigint;
 BEGIN
+    perform checkrunnableprocess(runnableProcessId);
+    perform checkuser(userId);
+
     select into template * from runnable_processes where id = runnableProcessId;
 
-    for requiredRole in (select * from process_permissions pm where pm.process_id = template.id)
+    --Should never fail
+    perform CheckStep(template.start_step_id);
+
+    for requiredRole in (select * from process_permissions pm where pm.process_id = template.id and is_deleted = false)
         loop
             select into isSuitable from IsUserSuitable(userId, requiredRole.id);
             if isSuitable = true then
@@ -427,15 +1143,17 @@ BEGIN
 
     INSERT INTO processes (created_from_process_id, current_step_id)
     values (template.id, template.start_step_id)
-    RETURNING id INTO new_process_id;
+    RETURNING id INTO resultProcessId;
 
     insert into process_history (process_id, performed_at, performed_by_user_id, resolution_id)
-    values (new_process_id, UtcNow(), userId, null);
+    values (resultProcessId, UtcNow(), userId, null);
+
+    return resultProcessId;
 END
 $$;
 
 
-ALTER FUNCTION public.startprocess(runnableprocessid bigint, userid bigint, OUT new_process_id integer) OWNER TO postgres;
+ALTER FUNCTION public.startprocess(runnableprocessid bigint, userid bigint) OWNER TO postgres;
 
 --
 -- Name: utcnow(); Type: FUNCTION; Schema: public; Owner: postgres
@@ -1109,6 +1827,10 @@ COPY public.process_step_resolutions (current_step_id, next_step_id, resolution_
 2	1	Тестовая параша 3	10	f
 5	1	Тестовая параша 4	11	f
 1	8	Тестовый текст	12	f
+1	3	Тест говна	17	f
+2	8	Тест говна	18	f
+3	8	Тест говна	24	f
+5	8	Тест говна	25	f
 \.
 
 
@@ -1179,6 +1901,13 @@ COPY public.resolution_permissions (id, resolution_id, role_id, is_deleted) FROM
 6	10	7	f
 7	11	6	f
 8	12	\N	f
+9	17	7	f
+10	17	8	f
+11	17	10	f
+12	17	6	f
+13	18	\N	f
+14	24	\N	f
+15	25	\N	f
 \.
 
 
@@ -1192,6 +1921,7 @@ COPY public.roles (id, name, parent_id, is_deleted) FROM stdin;
 9	Warehouse worker	8	f
 10	Logistic worker	7	f
 6	admin	\N	f
+12	Test1	10	f
 \.
 
 
@@ -1265,7 +1995,7 @@ SELECT pg_catalog.setval('public.process_permissions_id_seq', 4, true);
 -- Name: process_step_resolutions_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.process_step_resolutions_id_seq', 12, true);
+SELECT pg_catalog.setval('public.process_step_resolutions_id_seq', 25, true);
 
 
 --
@@ -1307,14 +2037,14 @@ SELECT pg_catalog.setval('public.product_id_seq', 1, true);
 -- Name: resolution_permissions_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.resolution_permissions_id_seq', 8, true);
+SELECT pg_catalog.setval('public.resolution_permissions_id_seq', 15, true);
 
 
 --
 -- Name: roles_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.roles_id_seq', 11, true);
+SELECT pg_catalog.setval('public.roles_id_seq', 12, true);
 
 
 --
